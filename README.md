@@ -1,6 +1,27 @@
-## 本分支新增：RTL8922AE 诊断
+## 本分支网卡配置
 
 基于 [zzzz0317 原项目](https://github.com/zzzz0317/immortalwrt-xgp-auto-build)，保留原插件与设备配置。构建仅手动触发。
+
+`xgp.config` 显式选择以下 Wi-Fi 驱动和固件；`build.sh` 在 `make defconfig` 后检查这些选项，缺项时停止构建并显示配置名称。
+
+| 网卡型号 | 驱动包 | Wi-Fi 固件包 |
+| --- | --- | --- |
+| RTL8922AE | `kmod-rtw89-8922ae` | `rtl8922ae-firmware`（包含 fw-4） |
+| RTL8852BE | `kmod-rtw89-8852be` | `rtl8852be-firmware` |
+| RTL8852CE | `kmod-rtw89-8852ce` | `rtl8852ce-firmware` |
+| MT7925 | `kmod-mt7925e` | `kmod-mt7925-firmware` |
+| MT7922（M.2 / miniPCIe） | `kmod-mt7921e` | `kmod-mt7922-firmware` |
+| QCNFA765（WCN6855） | `kmod-ath11k-pci` | `ath11k-firmware-wcn6855` |
+| QCNCM865（WCN7850） | `kmod-ath12k` | `ath12k-firmware-wcn7850` |
+| QCA9880 / QCA9882 | `kmod-ath10k` | `ath10k-firmware-qca988x`、`ath10k-board-qca988x` |
+
+图片中的“QNCM865”按 QCNCM865 / WCN7850 配置；最终以网卡实际芯片和 PCI ID 为准。相同型号的多张卡共用一个驱动包，MT7922 的两种接口也共用上述 PCIe 驱动。原有 RTL8852AE 驱动及固件继续保留。
+
+包名核对自 ImmortalWrt `openwrt-25.12` 分支的 [Realtek 驱动定义](https://github.com/immortalwrt/immortalwrt/blob/openwrt-25.12/package/kernel/mac80211/realtek.mk)、[MediaTek 驱动与固件定义](https://github.com/immortalwrt/immortalwrt/blob/openwrt-25.12/package/kernel/mt76/Makefile)及 [Qualcomm 驱动定义](https://github.com/immortalwrt/immortalwrt/blob/openwrt-25.12/package/kernel/mac80211/ath.mk)。MT7922 的 PCI 设备由 [mt7921 PCIe 驱动](https://github.com/openwrt/mt76/blob/master/mt7921/pci.c)匹配。
+
+以上为构建配置，尚未逐卡实测；AP 模式、频段和带宽以实际驱动、固件及网卡状态为准。
+
+## RTL8922AE 诊断
 
 - 加入 RTL8852AE/BE/CE、RTL8922AE 驱动，并开启 rtw89 调试日志与 debugfs。
 - 补齐 `rtw8922a_fw-4.bin`，保留原有固件文件。

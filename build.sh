@@ -10,8 +10,30 @@ echo "diff initial config and new config (from old config only):"
 diff ../xgp.config .config | grep -e "^<" | grep -v "^< #"
 echo "diff initial config and new config (from new config only):"
 diff ../xgp.config .config | grep -e "^>" | grep -v "^> #"
-# 确认调试选项没有被依赖关系移除，避免编译出无法诊断的固件。
-for option in CONFIG_PACKAGE_kmod-rtw89-8922ae CONFIG_PACKAGE_RTW89_DEBUG CONFIG_PACKAGE_RTW89_DEBUGFS CONFIG_PACKAGE_RTW89_DEBUGMSG; do
+# 确认网卡驱动、固件与诊断选项没有被 defconfig 的依赖检查移除。
+for option in \
+    CONFIG_PACKAGE_kmod-rtw89-8852ae \
+    CONFIG_PACKAGE_rtl8852ae-firmware \
+    CONFIG_PACKAGE_kmod-rtw89-8852be \
+    CONFIG_PACKAGE_rtl8852be-firmware \
+    CONFIG_PACKAGE_kmod-rtw89-8852ce \
+    CONFIG_PACKAGE_rtl8852ce-firmware \
+    CONFIG_PACKAGE_kmod-rtw89-8922ae \
+    CONFIG_PACKAGE_rtl8922ae-firmware \
+    CONFIG_PACKAGE_kmod-mt7921e \
+    CONFIG_PACKAGE_kmod-mt7922-firmware \
+    CONFIG_PACKAGE_kmod-mt7925e \
+    CONFIG_PACKAGE_kmod-mt7925-firmware \
+    CONFIG_PACKAGE_kmod-ath11k-pci \
+    CONFIG_PACKAGE_ath11k-firmware-wcn6855 \
+    CONFIG_PACKAGE_kmod-ath12k \
+    CONFIG_PACKAGE_ath12k-firmware-wcn7850 \
+    CONFIG_PACKAGE_kmod-ath10k \
+    CONFIG_PACKAGE_ath10k-firmware-qca988x \
+    CONFIG_PACKAGE_ath10k-board-qca988x \
+    CONFIG_PACKAGE_RTW89_DEBUG \
+    CONFIG_PACKAGE_RTW89_DEBUGFS \
+    CONFIG_PACKAGE_RTW89_DEBUGMSG; do
     grep -Fxq "${option}=y" .config || { echo "缺少必要配置：${option}"; exit 1; }
 done
 
