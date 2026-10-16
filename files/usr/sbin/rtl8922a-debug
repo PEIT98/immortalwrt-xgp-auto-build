@@ -1,0 +1,128 @@
+#!/bin/sh
+# 读取 RTL8922AE 的初始化日志；RFE 覆盖仅在本次运行中生效。
+set -eu
+
+debug_param=/sys/module/rtw89_core/parameters/debug_mask
+rfe_param=/sys/module/rtw89_8922a/parameters/rfe_type_override
+mode=${1:-status}
+
+usage() {
+    echo '用法：rtl8922a-debug status | collect | rfe <0..254或-1>'
+    echo 'status：查看状态；collect：导出参数；rfe：临时指定类型，-1恢复原始读取'
+    echo 'collect 和 rfe 会重新初始化无线，请通过有线或移动网络连接 SSH。'
+}
+
+case "$mode" in
+    status)
+        echo '===== 驱动测试参数 ====='
+        for p in "$debug_param" "$rfe_param"; do
+            if [ -r "$p" ]; then
+                printf '%s=' "${p##*/}"
+                cat "$p"
+            else
+                echo "${p##*/}：当前驱动未提供此入口"
+            fi
+        done
+        echo '===== 最近的初始化记录 ====='
+        dmesg | grep -E '8922.*(loaded firmware|Firmware version|efuse|rfe_type|RFE override|invalid PHY|failed)' | tail -n 35 || true
+        exit 0
+        ;;
+    collect) ;;
+    rfe)
+        value=${2:-}
+        if ! printf '%s\n' "$value" | grep -Eq '^(-1|0|[1-9][0-9]{0,2})$'; then
+            usage
+            exit 1
+        fi
+        if [ "$value" -lt -1 ] || [ "$value" -gt 254 ]; then
+            usage
+            exit 1
+        fi
+        [ -w "$rfe_param" ] || { echo '当前驱动未包含 RFE 测试补丁'; exit 1; }
+        ;;
+    *) usage; exit 1 ;;
+esac
+
+[ "$(id -u)" = 0 ] || { echo '需要以 root 执行'; exit 1; }
+[ -w "$debug_param" ] || { echo '当前驱动没有编译调试日志功能'; exit 1; }
+command -v logread >/dev/null 2>&1 || { echo '缺少 logread'; exit 1; }
+command -v wifi >/dev/null 2>&1 || { echo '缺少 wifi 命令'; exit 1; }
+
+# 只选择 RTL8922AE，避免误操作其他 PCIe 设备。
+pci_id=
+for dev in /sys/bus/pci/devices/*; do
+    [ -r "$dev/vendor" ] && [ -r "$dev/device" ] || continue
+    [ "$(cat "$dev/vendor")" = 0x10ec ] || continue
+    [ "$(cat "$dev/device")" = 0x8922 ] || continue
+    [ -z "$pci_id" ] || { echo '发现多张 RTL8922AE，请仅保留一张进行诊断'; exit 1; }
+    pci_id=${dev##*/}
+done
+[ -n "$pci_id" ] || { echo '没有找到 RTL8922AE'; exit 1; }
+driver=$(readlink -f "/sys/bus/pci/devices/$pci_id/driver")
+[ "${driver##*/}" = rtw89_8922ae ] || { echo '网卡没有绑定预期驱动'; exit 1; }
+[ -w "$driver/unbind" ] && [ -w "$driver/bind" ] || { echo '驱动不支持重新绑定'; exit 1; }
+
+old_debug=$(cat "$debug_param")
+old_rfe=
+[ ! -r "$rfe_param" ] || old_rfe=$(cat "$rfe_param")
+log_pid=
+unbound=0
+wifi_down=0
+finished=0
+cleanup() {
+    if [ "$finished" = 0 ] && [ "$mode" = rfe ] && [ -n "$old_rfe" ]; then
+        printf '%s' "$old_rfe" > "$rfe_param" 2>/dev/null || true
+    fi
+    if [ "$unbound" = 1 ]; then
+        printf '%s' "$pci_id" > "$driver/bind" 2>/dev/null || true
+    fi
+    if [ "$wifi_down" = 1 ]; then
+        wifi up >/dev/null 2>&1 || true
+    fi
+    [ ! -w "$debug_param" ] || printf '%s' "$old_debug" > "$debug_param" || true
+    if [ -n "$log_pid" ]; then
+        kill "$log_pid" 2>/dev/null || true
+        wait "$log_pid" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
+trap 'exit 1' INT TERM
+
+umask 077
+log_file="/tmp/rtl8922a-$(date +%Y%m%d-%H%M%S)-$$.log"
+{
+    echo "诊断模式：$mode；PCIe设备：$pci_id"
+    uname -a
+    if [ -r "$rfe_param" ]; then
+        printf '原 RFE 覆盖参数：'
+        cat "$rfe_param"
+    fi
+} > "$log_file"
+
+if [ "$mode" = rfe ]; then
+    printf '%s' "$value" > "$rfe_param"
+    echo "设置临时 RFE 覆盖值：$value" | tee -a "$log_file"
+fi
+
+# FW 调试位为 BIT(12)，eFuse 的物理和逻辑映射均通过此日志位输出。
+printf '%s' "$((old_debug | 4096))" > "$debug_param"
+logread -f >> "$log_file" 2>&1 &
+log_pid=$!
+sleep 1
+kill -0 "$log_pid" 2>/dev/null || { echo '日志跟踪启动失败'; exit 1; }
+logger -t rtl8922a-debug '开始重新读取网卡参数'
+wifi down
+wifi_down=1
+printf '%s' "$pci_id" > "$driver/unbind"
+unbound=1
+printf '%s' "$pci_id" > "$driver/bind"
+unbound=0
+wifi up
+wifi_down=0
+sleep 8
+finished=1
+
+echo "完整日志已保存：$log_file"
+echo '===== 关键结果 ====='
+grep -E '8922.*(loaded firmware|Firmware version|efuse|rfe_type|RFE override|invalid PHY|failed)' "$log_file" | tail -n 35 || true
+echo '可将完整日志文件导出，用于判断参数缺失范围。'

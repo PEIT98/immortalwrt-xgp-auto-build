@@ -1,0 +1,39 @@
+--- a/drivers/net/wireless/realtek/rtw89/rtw8922a.c
++++ b/drivers/net/wireless/realtek/rtw89/rtw8922a.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
+ /* Copyright(c) 2023  Realtek Corporation
+  */
++
++#include <linux/moduleparam.h>
+ 
+ #include "chan.h"
+ #include "coex.h"
+@@ -14,6 +16,12 @@
+ #include "rtw8922a_rfk.h"
+ #include "sar.h"
+ #include "util.h"
++
++/* 默认关闭；仅对读到 0xff 的 RFE 字段提供运行时测试覆盖。 */
++static int rtw8922a_rfe_type_override = -1;
++module_param_named(rfe_type_override, rtw8922a_rfe_type_override, int, 0644);
++MODULE_PARM_DESC(rfe_type_override,
++                "RFE override for blank 0xff efuse only (-1=off, 0..254)");
+ 
+ #define RTW8922A_FW_FORMAT_MAX 4
+ #define RTW8922A_FW_BASENAME "rtw89/rtw8922a_fw"
+@@ -620,8 +628,14 @@
+ {
+ 	struct rtw8922a_efuse *map = (struct rtw8922a_efuse *)log_map;
+ 	struct rtw89_efuse *efuse = &rtwdev->efuse;
++	int rfe_override = READ_ONCE(rtw8922a_rfe_type_override);
+ 
+ 	efuse->rfe_type = map->rfe_type;
++	if (efuse->rfe_type == 0xff && rfe_override >= 0 && rfe_override < 0xff) {
++		rtw89_warn(rtwdev, "RFE override: efuse=255, using %d (RAM only)\n",
++			   rfe_override);
++		efuse->rfe_type = (u8)rfe_override;
++	}
+ 	efuse->xtal_cap = map->xtal_k;
+ 	efuse->country_code[0] = map->country_code[0];
+ 	efuse->country_code[1] = map->country_code[1];

@@ -10,6 +10,11 @@ echo "diff initial config and new config (from old config only):"
 diff ../xgp.config .config | grep -e "^<" | grep -v "^< #"
 echo "diff initial config and new config (from new config only):"
 diff ../xgp.config .config | grep -e "^>" | grep -v "^> #"
+# 确认调试选项没有被依赖关系移除，避免编译出无法诊断的固件。
+for option in CONFIG_PACKAGE_kmod-rtw89-8922ae CONFIG_PACKAGE_RTW89_DEBUG CONFIG_PACKAGE_RTW89_DEBUGFS CONFIG_PACKAGE_RTW89_DEBUGMSG; do
+    grep -Fxq "${option}=y" .config || { echo "缺少必要配置：${option}"; exit 1; }
+done
+
 echo "check device exist"
 grep -Fxq "CONFIG_TARGET_rockchip_armv8_DEVICE_nlnet_xiguapi-v3=y" .config || exit 1
 

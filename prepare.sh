@@ -51,6 +51,9 @@ diff ../files/lib/wifi/mac80211.uc ./files/lib/wifi/mac80211.uc
 echo "diff lib/wifi/mac80211.uc with immortalwrt repo:"
 diff package/network/config/wifi-scripts/files/lib/wifi/mac80211.uc ./files/lib/wifi/mac80211.uc
 
+# RTL8922AE 诊断支持：复制补丁并补齐 fw-4 固件
+python3 ../scripts/prepare-rtl8922a.py . || exit 1
+
 # Add TD-TECH option id patch
 echo "add TD-TECH option id patch"
 cp ../999-add-TD-TECH-option-id.patch ./target/linux/rockchip/patches-6.12/999-add-TD-TECH-option-id.patch

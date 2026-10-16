@@ -1,6 +1,35 @@
+## 本分支新增：RTL8922AE 诊断
+
+基于 [zzzz0317 原项目](https://github.com/zzzz0317/immortalwrt-xgp-auto-build)，保留原插件与设备配置。构建仅手动触发。
+
+- 加入 RTL8852AE/BE/CE、RTL8922AE 驱动，并开启 rtw89 调试日志与 debugfs。
+- 补齐 `rtw8922a_fw-4.bin`，保留原有固件文件。
+- 加入 `rfe_type_override` 测试参数，默认 `-1`（关闭）。只有原始 RFE 为 `255` 时才覆盖；正常值保持原样。此参数不写入网卡 eFuse，也不恢复其他校准字段。
+
+刷入本分支构建的固件后，通过有线或移动网络连接 SSH，执行：
+
+```sh
+rtl8922a-debug status
+rtl8922a-debug collect
+```
+
+`collect` 会重新初始化无线，完整 eFuse 调试日志保存在命令显示的 `/tmp/rtl8922a-*.log` 文件中。
+
+确认同型号、同 PCB 的实际 RFE 类型后，使用 `rtl8922a-debug rfe 类型值` 做临时测试。可接受 `0..254`；编号不是通用默认值，8822CS 案例中的 `0` 不能直接视为 8922AE 的正确值。
+
+恢复原始读取方式：
+
+```sh
+rtl8922a-debug rfe -1
+```
+
+重启也会恢复默认关闭状态。当前补丁尚未经过这批故障卡实测，能否修复取决于原始参数和硬件状态。
+
+---
+
 # NLnet XiGuaPi V3 (西瓜皮V3) Immortalwrt 自动构建
 
-[![Build and Release](https://github.com/zzzz0317/immortalwrt-xgp-auto-build/actions/workflows/build.yml/badge.svg)](https://github.com/zzzz0317/immortalwrt-xgp-auto-build/actions/workflows/build.yml)
+[![Build and Release](https://github.com/PEIT98/immortalwrt-xgp-auto-build/actions/workflows/build.yml/badge.svg)](https://github.com/PEIT98/immortalwrt-xgp-auto-build/actions/workflows/build.yml)
 
 # 正在开发与调试中，小白误用
 
@@ -13,7 +42,7 @@
 ## 说明
 
 1. 第一次使用建议通过 RKDevTool 刷入，若通过 Web 刷入时提示不兼容请做好 USB 救砖准备再尝试
-2. [Actions](https://github.com/zzzz0317/immortalwrt-xgp-auto-build/blob/main/.github/workflows/build.yml) 在北京时间每周五凌晨2点自动拉取 [Immortalwrt](https://github.com/immortalwrt/immortalwrt) 代码编译并发布，平时可能会不定期手动触发更新
+2. [Actions](https://github.com/zzzz0317/immortalwrt-xgp-auto-build/blob/main/.github/workflows/build.yml) 仅在手动运行工作流时拉取 [Immortalwrt](https://github.com/immortalwrt/immortalwrt) 代码编译并发布，平时可能会不定期手动触发更新
 3. 默认 Wi-Fi SSID: `zzXGP`，密码: `xgpxgpxgp`
 4. 默认 LAN 接口地址: `192.168.1.1`
 5. 默认 root 密码: `xgpxgpxgp`，后续可能会变更
